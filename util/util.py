@@ -4,7 +4,6 @@ import numpy as np
 from PIL import Image
 import os
 from collections import OrderedDict
-from IPython import embed
 
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array
@@ -271,8 +270,8 @@ def crop_mult(data,mult=16,HWmax=[800,1200]):
     H,W = data.shape[2:]
     Hnew = int(min(H/mult*mult,HWmax[0]))
     Wnew = int(min(W/mult*mult,HWmax[1]))
-    h = (H-Hnew)/2
-    w = (W-Wnew)/2
+    h = int((H - Hnew) / 2)
+    w = int((W - Wnew) / 2)
 
     return data[:,:,h:h+Hnew,w:w+Wnew]
 
