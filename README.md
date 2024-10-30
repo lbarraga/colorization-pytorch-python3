@@ -4,10 +4,12 @@
 
 ## Fast start
 
-1. clone this repo:
+1. clone this repo and create a virtual environment:
   ```bash
   git clone https://github.com/lbarraga/colorization-pytorch-python3.git
   cd colorization-pytorch-python3
+  python3 -m venv venv
+  source venv/bin/activate
   ```
 
 2. Install dependencies:
@@ -28,7 +30,7 @@
 
 6. Test the model:
 ```bash
-python test.py --name siggraph_caffemodel --how-may 10 --mask_cent 0
+python test.py --name siggraph_caffemodel --how-many 10 --mask_cent 0
 ```
     
 7. A results folder will be created with the results of the test. You can visualize the results by opening the index.html file in the results folder.
