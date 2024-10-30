@@ -27,9 +27,9 @@
   ```
 
 6. Test the model:
-  ```bash
-    python test.py --name siggraph_caffemodel --how-may 10 --mask_cent 0
-    ```
+```bash
+python test.py --name siggraph_caffemodel --how-may 10 --mask_cent 0
+```
     
 7. A results folder will be created with the results of the test. You can visualize the results by opening the index.html file in the results folder.
 
