@@ -223,6 +223,8 @@ def add_color_patches_rand_gt(data,opt,p=.125,num_points=None,use_avg=True,samp=
         pp = 0
         cont_cond = True
         while(cont_cond):
+
+            # calculate the number of points to add (either from geometric random or fixed)
             if(num_points is None): # draw from geometric
                 # embed()
                 cont_cond = np.random.rand() < (1-p)
@@ -231,10 +233,12 @@ def add_color_patches_rand_gt(data,opt,p=.125,num_points=None,use_avg=True,samp=
             if(not cont_cond): # skip out of loop if condition not met
                 continue
 
-            P = np.random.choice(opt.sample_Ps) # patch size
+            P = np.random.choice(opt.sample_Ps) # hint size
 
             # sample location
             if(samp=='normal'): # geometric distribution
+                # Choose random point from normal distribution, sample around the center
+                # Clip ensures that the sampled value is within the valid range [0, H - P], preventing the patch from going out of bounds
                 h = int(np.clip(np.random.normal( (H-P+1)/2., (H-P+1)/4.), 0, H-P))
                 w = int(np.clip(np.random.normal( (W-P+1)/2., (W-P+1)/4.), 0, W-P))
             else: # uniform distribution
@@ -244,9 +248,14 @@ def add_color_patches_rand_gt(data,opt,p=.125,num_points=None,use_avg=True,samp=
             # add color point
             if(use_avg):
                 # embed()
-                data['hint_B'][nn,:,h:h+P,w:w+P] = torch.mean(torch.mean(data['B'][nn,:,h:h+P,w:w+P],dim=2,keepdim=True),dim=1,keepdim=True).view(1,C,1,1)
+                data['hint_B'][nn,:,h:h+P,w:w+P] = torch.mean( # select patch of size PxP at (h, w)
+                    torch.mean(
+                        data['B'][nn,:,h:h+P,w:w+P], dim=2, keepdim=True # Calculate the mean color along the height
+                    ),
+                    dim=1, keepdim=True # Calculate the mean color along the width
+                ).view(1,C,1,1) # Reshape the tensor to the correct shape
             else:
-                data['hint_B'][nn,:,h:h+P,w:w+P] = data['B'][nn,:,h:h+P,w:w+P]
+                data['hint_B'][nn,:,h:h+P,w:w+P] = data['B'][nn,:,h:h+P,w:w+P] # directly copy a patch of pixels as hint instead of averaging
 
             data['mask_B'][nn,:,h:h+P,w:w+P] = 1
 
