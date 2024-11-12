@@ -266,6 +266,77 @@ def add_color_patches_rand_gt(data,opt,p=.125,num_points=None,use_avg=True,samp=
 
     return data
 
+
+def add_color_patches_contrast(data, opt, p=0.125, num_points=None, use_avg=True, samp='contrast'):
+    """
+    Add color patches based on contrast-based sampling using intensity histogram.
+    This approach samples patches from both high-intensity and low-intensity regions
+    in the grayscale image to ensure coverage of different tonal regions.
+    """
+    N, C, H, W = data['B'].shape
+
+    # Initialize hint and mask tensors
+    data['hint_B'] = torch.zeros_like(data['B'])
+    data['mask_B'] = torch.zeros_like(data['A'])
+
+    for nn in range(N):
+        # Convert grayscale channel to numpy for histogram computation
+        grayscale_img = data['A'][nn, 0, :, :].cpu().numpy()
+
+        # Compute intensity histogram and cumulative distribution function (CDF)
+        hist, bin_edges = np.histogram(grayscale_img, bins=256, range=(0, 1), density=True)
+        cdf = np.cumsum(hist) / hist.sum()
+
+        # Calculate low and high intensity thresholds based on CDF
+        low_threshold = bin_edges[np.searchsorted(cdf, 0.1)]  # Bottom 10% intensity
+        high_threshold = bin_edges[np.searchsorted(cdf, 0.9)]  # Top 10% intensity
+
+        # Select pixels in low and high intensity ranges
+        low_intensity_coords = np.argwhere(grayscale_img <= low_threshold)
+        high_intensity_coords = np.argwhere(grayscale_img >= high_threshold)
+
+        # Combine both low and high intensity coordinates
+        selected_coords = np.vstack((low_intensity_coords, high_intensity_coords))
+
+        # If there are fewer points than needed, repeat or sample with replacement
+        if num_points is None:
+            num_samples = np.random.geometric(p)  # Geometric distribution for point count
+        else:
+            num_samples = num_points
+
+        if len(selected_coords) < num_samples:
+            selected_coords = np.tile(selected_coords, (num_samples // len(selected_coords) + 1, 1))
+
+        # Randomly sample from selected coordinates
+        sampled_coords = selected_coords[np.random.choice(len(selected_coords), num_samples, replace=False)]
+
+        # Add color hints at the sampled coordinates
+        for coord in sampled_coords:
+            h, w = coord
+            P = np.random.choice(opt.sample_Ps)  # Random patch size from options
+
+            h = max(0, min(H - P, h))  # Ensure within bounds
+            w = max(0, min(W - P, w))
+
+            if use_avg:
+                # Average color for the patch
+                data['hint_B'][nn, :, h:h + P, w:w + P] = torch.mean(
+                    torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True),
+                    dim=1, keepdim=True
+                ).view(1, C, 1, 1)
+            else:
+                # Directly copy patch
+                data['hint_B'][nn, :, h:h + P, w:w + P] = data['B'][nn, :, h:h + P, w:w + P]
+
+            # Set mask for the color patch
+            data['mask_B'][nn, :, h:h + P, w:w + P] = 1
+
+    # Adjust mask offset
+    data['mask_B'] -= opt.mask_cent
+
+    return data
+
+
 def add_color_patch(data,mask,opt,P=1,hw=[128,128],ab=[0,0]):
     # Add a color patch at (h,w) with color (a,b)
     data[:,0,hw[0]:hw[0]+P,hw[1]:hw[1]+P] = 1.*ab[0]/opt.ab_norm
