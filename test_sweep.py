@@ -22,7 +22,7 @@ if __name__ == '__main__':
     opt.phase = 'test'
     opt.dataroot = './dataset/ilsvrc2012/%s/' % opt.phase
     opt.loadSize = 256
-    opt.how_many = 1000
+    opt.how_many = 100 # not set by cli args?
     opt.aspect_ratio = 1.0
     opt.sample_Ps = [6, ]
     opt.load_model = True
@@ -75,6 +75,10 @@ if __name__ == '__main__':
     psnrs_mean = np.mean(psnrs, axis=0)
     psnrs_std = np.std(psnrs, axis=0) / np.sqrt(opt.how_many)
 
+    print(psnrs_mean)
+    print("====")
+    print(psnrs_std)
+
     np.save('./checkpoints/%s/psnrs_mean_%s' % (opt.name, str_now), psnrs_mean)
     np.save('./checkpoints/%s/psnrs_std_%s' % (opt.name, str_now), psnrs_std)
     np.save('./checkpoints/%s/psnrs_%s' % (opt.name, str_now), psnrs)
@@ -89,11 +93,11 @@ if __name__ == '__main__':
     num_points_hack[0] = .4
 
     plt.plot(num_points_hack, psnrs_mean, 'bo-', label=str_now)
-    plt.plot(num_points_hack, psnrs_mean + psnrs_std, 'b--')
-    plt.plot(num_points_hack, psnrs_mean - psnrs_std, 'b--')
-    plt.plot(num_points_hack, old_mean, 'ro-', label='siggraph17')
-    plt.plot(num_points_hack, old_mean + old_std, 'r--')
-    plt.plot(num_points_hack, old_mean - old_std, 'r--')
+    plt.fill_between(num_points_hack, psnrs_mean - psnrs_std, psnrs_mean + psnrs_std, color='blue', alpha=0.2)
+
+    # plt.plot(num_points_hack, old_mean, 'ro-', label='siggraph17')
+    # plt.plot(num_points_hack, old_mean + old_std, 'r--')
+    # plt.plot(num_points_hack, old_mean - old_std, 'r--')
 
     plt.xscale('log')
     plt.xticks([.4, 1, 2, 5, 10, 20, 50, 100, 200, 500],
