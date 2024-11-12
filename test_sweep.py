@@ -1,3 +1,4 @@
+import csv
 from options.train_options import TrainOptions
 from models import create_model
 
@@ -57,14 +58,13 @@ if __name__ == '__main__':
         data_raw[0] = util.crop_mult(data_raw[0], mult=8)
 
         for nn in range(N):
-            # embed()
             data = util.get_colorization_data(data_raw, opt, ab_thresh=0., num_points=num_points[nn])
 
             model.set_input(data)
             model.test()
             visuals = model.get_current_visuals()
 
-            psnrs[i, nn] = util.calculate_psnr_np(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg'])) # !
+            psnrs[i, nn] = util.calculate_psnr_np(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg']))
 
         if i == opt.how_many - 1:
             break
@@ -84,20 +84,19 @@ if __name__ == '__main__':
     np.save('./checkpoints/%s/psnrs_%s' % (opt.name, str_now), psnrs)
     print(', '.join(['%.2f' % psnr for psnr in psnrs_mean]))
 
-    old_results = np.load('./resources/psnrs_siggraph.npy')
-    old_mean = np.mean(old_results, axis=0)
-    old_std = np.std(old_results, axis=0) / np.sqrt(old_results.shape[0])
-    print(', '.join(['%.2f' % psnr for psnr in old_mean]))
+    # Save results to CSV
+    csv_file = './checkpoints/%s/results_%s.csv' % (opt.name, str_now)
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['num_points', 'psnr_mean', 'psnr_std'])
+        for nn in range(N):
+            writer.writerow([num_points[nn], psnrs_mean[nn], psnrs_std[nn]])
 
     num_points_hack = 1. * num_points
     num_points_hack[0] = .4
 
     plt.plot(num_points_hack, psnrs_mean, 'bo-', label=str_now)
     plt.fill_between(num_points_hack, psnrs_mean - psnrs_std, psnrs_mean + psnrs_std, color='blue', alpha=0.2)
-
-    # plt.plot(num_points_hack, old_mean, 'ro-', label='siggraph17')
-    # plt.plot(num_points_hack, old_mean + old_std, 'r--')
-    # plt.plot(num_points_hack, old_mean - old_std, 'r--')
 
     plt.xscale('log')
     plt.xticks([.4, 1, 2, 5, 10, 20, 50, 100, 200, 500],
