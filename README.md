@@ -50,5 +50,5 @@ python test_sweep.py --name siggraph_caffemodel --mask_cent 0
 
 in the code of test_sweep.py you can set the `how_many` flag, that has been hardcoded to something different.
 
-in `./checkpoints/siggraph_caffemodel/sweep_*.png` you will find a csv with the mean and std for each number of points, 
+in `./checkpoints/siggraph_caffemodel` you will find a csv with the mean and std for each number of points, 
 along with the plot of the test.
