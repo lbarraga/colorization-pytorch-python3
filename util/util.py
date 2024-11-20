@@ -8,7 +8,8 @@ import numpy as np
 import torch
 from PIL import Image
 import cv2
-from functorch.dim import Tensor
+from numpy.f2py.auxfuncs import throw_error
+from torch import Tensor
 
 
 # Converts a Tensor into an image array (numpy)
@@ -225,6 +226,7 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
 
         P = 6
         points = add_color_patches_rand_geometric(H, W, P, point_count)
+        # points = add_color_patches_blob_detector(data, point_count, opt)
 
         for h, w in points:
             mean_height: Tensor = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
@@ -237,14 +239,11 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
 
 
 def add_color_patches_rand_geometric(H: int, W: int, P: int, n: int):
-    points =  []
-
+    points = []
     for i in range(n):
-        H = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
-        W = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
-
-        points.append((H, W))
-
+        h = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
+        w = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
+        points.append((h, w))
     return points
 
 
@@ -255,13 +254,20 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
         h = np.random.randint(H - P + 1)
         w = np.random.randint(W - P + 1)
 
-        points.append((H, W))
+        points.append((h, w))
 
     return points
 
 
-def add_color_patches_blob_detector(data, num_points: int) -> List[Tuple[int, int]]:
-    img = tensor2im(xyz2rgb(lab2xyz(torch.cat((data['A'], data['B']), dim=1))))
+def add_color_patches_blob_detector(data, num_points: int, opt) -> List[Tuple[int, int]]:
+    img = tensor2im(lab2rgb(torch.cat((data['A'], data['B']), dim=1), opt))
+    # cv2.imshow("img", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # # TODO: make bw image
+    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # print(img.shape)
 
     params = cv2.SimpleBlobDetector_Params()
 
