@@ -2,10 +2,12 @@ from __future__ import print_function
 
 import os
 from collections import OrderedDict
+from typing import List, Tuple
 
 import numpy as np
 import torch
 from PIL import Image
+import cv2
 from functorch.dim import Tensor
 
 
@@ -256,6 +258,38 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
         points.append((H, W))
 
     return points
+
+
+def add_color_patches_blob_detector(data, num_points: int) -> List[Tuple[int, int]]:
+    img = tensor2im(xyz2rgb(lab2xyz(torch.cat((data['A'], data['B']), dim=1))))
+
+    params = cv2.SimpleBlobDetector_Params()
+
+    params.blobColor = 255
+    params.minThreshold = 10
+    params.maxThreshold = 200
+
+    params.filterByArea = True
+    params.minArea = 10
+
+    params.filterByCircularity = False
+    params.filterByConvexity = False
+    params.filterByInertia = False
+
+    detector = cv2.SimpleBlobDetector_create(params)
+    keypoints = detector.detect(img)
+    if len(keypoints) < num_points:
+        params.filterByArea = False
+        detector = cv2.SimpleBlobDetector_create(params)
+        keypoints = detector.detect(img)
+
+    # if not enough points, return wat we have :(
+    if len(keypoints) > num_points: # if enough points, sort by size and keep the largest
+        sorted_keypoints = sorted(keypoints, key=lambda kp: kp.size, reverse=True)
+        keypoints = sorted_keypoints[:num_points]
+
+    # clean up keypoints and return as List[tuple[int, int]]
+    return list(map(lambda kp: (int(kp.pt[0]), int(kp.pt[1])), keypoints))
 
 
 def add_color_patch(data,mask,opt,P=1,hw=[128,128],ab=[0,0]):
