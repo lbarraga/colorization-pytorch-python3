@@ -6,6 +6,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from PIL import Image
+from functorch.dim import Tensor
 
 
 # Converts a Tensor into an image array (numpy)
@@ -207,9 +208,9 @@ def get_colorization_data(data_raw, opt, ab_thresh=5., p=.125, num_points=None):
         if(torch.sum(mask)==0):
             return None
 
-    return add_color_patches_rand_gt(data, opt, p=p, num_points=num_points)
+    return add_color_patches(data, opt, p=p, num_points=num_points)
 
-def add_color_patches_rand_gt(data, opt, p=0.125, num_points=None, samp='?'):
+def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
     N, C, H, W = data['B'].shape
 
     data['hint_B'] = torch.zeros_like(data['B'])
@@ -220,29 +221,42 @@ def add_color_patches_rand_gt(data, opt, p=0.125, num_points=None, samp='?'):
 
         point_count = np.random.geometric(p) if num_points is None else num_points
 
-        for _ in range(point_count):
-            P = 6  # Size of the hint patch
+        P = 6
+        points = add_color_patches_rand_geometric(H, W, P, point_count)
 
-            # Sample location
-            if samp == 'normal':
-                h = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
-                w = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
-            else:
-                h = np.random.randint(H - P + 1)
-                w = np.random.randint(W - P + 1)
+        for h, w in points:
+            mean_height: Tensor = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
+            mean: Tensor = torch.mean(mean_height, dim=1, keepdim=True)
 
-            # Add color point
-            # embed()
-            data['hint_B'][nn, :, h:h + P, w:w + P] = torch.mean(  # select patch of size PxP at (h, w)
-                torch.mean(
-                    data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True  # Calculate the mean color along the height
-                ),
-                dim=1, keepdim=True  # Calculate the mean color along the width
-            ).view(1, C, 1, 1)  # Reshape the tensor to the correct shape
-
+            data['hint_B'][nn, :, h:h + P, w:w + P] = mean.view(1, C, 1, 1)  # Reshape the tensor to the correct shape
             data['mask_B'][nn, :, h:h + P, w:w + P] = 1
 
     return data
+
+
+def add_color_patches_rand_geometric(H: int, W: int, P: int, n: int):
+    points =  []
+
+    for i in range(n):
+        H = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
+        W = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
+
+        points.append((H, W))
+
+    return points
+
+
+def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
+    points = []
+
+    for i in range(n):
+        h = np.random.randint(H - P + 1)
+        w = np.random.randint(W - P + 1)
+
+        points.append((H, W))
+
+    return points
+
 
 def add_color_patch(data,mask,opt,P=1,hw=[128,128],ab=[0,0]):
     # Add a color patch at (h,w) with color (a,b)
