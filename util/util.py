@@ -1,9 +1,12 @@
 from __future__ import print_function
-import torch
-import numpy as np
-from PIL import Image
+
 import os
 from collections import OrderedDict
+
+import numpy as np
+import torch
+from PIL import Image
+
 
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array
@@ -206,136 +209,40 @@ def get_colorization_data(data_raw, opt, ab_thresh=5., p=.125, num_points=None):
 
     return add_color_patches_rand_gt(data, opt, p=p, num_points=num_points)
 
-def add_color_patches_rand_gt(data,opt,p=.125,num_points=None,use_avg=True,samp='normal'):
-# Add random color points sampled from ground truth based on:
-#   Number of points
-#   - if num_points is 0, then sample from geometric distribution, drawn from probability p
-#   - if num_points > 0, then sample that number of points
-#   Location of points
-#   - if samp is 'normal', draw from N(0.5, 0.25) of image
-#   - otherwise, draw from U[0, 1] of image
-    N,C,H,W = data['B'].shape
-
-    data['hint_B'] = torch.zeros_like(data['B'])
-    data['mask_B'] = torch.zeros_like(data['A'])
-
-    for nn in range(N):
-        pp = 0
-        cont_cond = True
-        while(cont_cond):
-
-            # calculate the number of points to add (either from geometric random or fixed)
-            if(num_points is None): # draw from geometric
-                # embed()
-                cont_cond = np.random.rand() < (1-p)
-            else: # add certain number of points
-                cont_cond = pp < num_points
-            if(not cont_cond): # skip out of loop if condition not met
-                continue
-
-            P = np.random.choice(opt.sample_Ps) # hint size
-
-            # sample location
-            if(samp=='normal'): # geometric distribution
-                # Choose random point from normal distribution, sample around the center
-                # Clip ensures that the sampled value is within the valid range [0, H - P], preventing the patch from going out of bounds
-                h = int(np.clip(np.random.normal( (H-P+1)/2., (H-P+1)/4.), 0, H-P))
-                w = int(np.clip(np.random.normal( (W-P+1)/2., (W-P+1)/4.), 0, W-P))
-            else: # uniform distribution
-                h = np.random.randint(H-P+1)
-                w = np.random.randint(W-P+1)
-
-            # add color point
-            if(use_avg):
-                # embed()
-                data['hint_B'][nn,:,h:h+P,w:w+P] = torch.mean( # select patch of size PxP at (h, w)
-                    torch.mean(
-                        data['B'][nn,:,h:h+P,w:w+P], dim=2, keepdim=True # Calculate the mean color along the height
-                    ),
-                    dim=1, keepdim=True # Calculate the mean color along the width
-                ).view(1,C,1,1) # Reshape the tensor to the correct shape
-            else:
-                data['hint_B'][nn,:,h:h+P,w:w+P] = data['B'][nn,:,h:h+P,w:w+P] # directly copy a patch of pixels as hint instead of averaging
-
-            data['mask_B'][nn,:,h:h+P,w:w+P] = 1
-
-            # increment counter
-            pp+=1
-
-    data['mask_B']-=opt.mask_cent
-
-    return data
-
-
-def add_color_patches_contrast(data, opt, p=0.125, num_points=None, use_avg=True, samp='contrast'):
-    """
-    Add color patches based on contrast-based sampling using intensity histogram.
-    This approach samples patches from both high-intensity and low-intensity regions
-    in the grayscale image to ensure coverage of different tonal regions.
-    """
+def add_color_patches_rand_gt(data, opt, p=0.125, num_points=None, samp='?'):
     N, C, H, W = data['B'].shape
 
-    # Initialize hint and mask tensors
     data['hint_B'] = torch.zeros_like(data['B'])
     data['mask_B'] = torch.zeros_like(data['A'])
 
     for nn in range(N):
-        # Convert grayscale channel to numpy for histogram computation
-        grayscale_img = data['A'][nn, 0, :, :].cpu().numpy()
+        # Determine the number of points to add using a ternary operator
 
-        # Compute intensity histogram and cumulative distribution function (CDF)
-        hist, bin_edges = np.histogram(grayscale_img, bins=256, range=(0, 1), density=True)
-        cdf = np.cumsum(hist) / hist.sum()
+        point_count = np.random.geometric(p) if num_points is None else num_points
 
-        # Calculate low and high intensity thresholds based on CDF
-        low_threshold = bin_edges[np.searchsorted(cdf, 0.1)]  # Bottom 10% intensity
-        high_threshold = bin_edges[np.searchsorted(cdf, 0.9)]  # Top 10% intensity
+        for _ in range(point_count):
+            P = 6  # Size of the hint patch
 
-        # Select pixels in low and high intensity ranges
-        low_intensity_coords = np.argwhere(grayscale_img <= low_threshold)
-        high_intensity_coords = np.argwhere(grayscale_img >= high_threshold)
-
-        # Combine both low and high intensity coordinates
-        selected_coords = np.vstack((low_intensity_coords, high_intensity_coords))
-
-        # If there are fewer points than needed, repeat or sample with replacement
-        if num_points is None:
-            num_samples = np.random.geometric(p)  # Geometric distribution for point count
-        else:
-            num_samples = num_points
-
-        if len(selected_coords) < num_samples:
-            selected_coords = np.tile(selected_coords, (num_samples // len(selected_coords) + 1, 1))
-
-        # Randomly sample from selected coordinates
-        sampled_coords = selected_coords[np.random.choice(len(selected_coords), num_samples, replace=False)]
-
-        # Add color hints at the sampled coordinates
-        for coord in sampled_coords:
-            h, w = coord
-            P = np.random.choice(opt.sample_Ps)  # Random patch size from options
-
-            h = max(0, min(H - P, h))  # Ensure within bounds
-            w = max(0, min(W - P, w))
-
-            if use_avg:
-                # Average color for the patch
-                data['hint_B'][nn, :, h:h + P, w:w + P] = torch.mean(
-                    torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True),
-                    dim=1, keepdim=True
-                ).view(1, C, 1, 1)
+            # Sample location
+            if samp == 'normal':
+                h = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
+                w = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
             else:
-                # Directly copy patch
-                data['hint_B'][nn, :, h:h + P, w:w + P] = data['B'][nn, :, h:h + P, w:w + P]
+                h = np.random.randint(H - P + 1)
+                w = np.random.randint(W - P + 1)
 
-            # Set mask for the color patch
+            # Add color point
+            # embed()
+            data['hint_B'][nn, :, h:h + P, w:w + P] = torch.mean(  # select patch of size PxP at (h, w)
+                torch.mean(
+                    data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True  # Calculate the mean color along the height
+                ),
+                dim=1, keepdim=True  # Calculate the mean color along the width
+            ).view(1, C, 1, 1)  # Reshape the tensor to the correct shape
+
             data['mask_B'][nn, :, h:h + P, w:w + P] = 1
 
-    # Adjust mask offset
-    data['mask_B'] -= opt.mask_cent
-
     return data
-
 
 def add_color_patch(data,mask,opt,P=1,hw=[128,128],ab=[0,0]):
     # Add a color patch at (h,w) with color (a,b)
@@ -403,7 +310,7 @@ def decode_mean(data_ab_quant, opt):
     #   data_ab_inf     Nx2xHxW \in [-1,1]
 
     (N,Q,H,W) = data_ab_quant.shape
-    a_range = torch.range(-opt.ab_max, opt.ab_max, step=opt.ab_quant).to(data_ab_quant.device)[None,:,None,None]
+    a_range = torch.arange(-opt.ab_max, opt.ab_max + opt.ab_quant, step=opt.ab_quant).to(data_ab_quant.device)[None, :, None, None]
     a_range = a_range.type(data_ab_quant.type())
 
     # reshape to AB space

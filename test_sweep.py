@@ -38,7 +38,7 @@ if __name__ == '__main__':
                                                transform=transforms.Compose([
                                                    transforms.Resize((opt.loadSize, opt.loadSize)),
                                                    transforms.ToTensor()]))
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=not opt.serial_batches)
+    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=True)
 
     model = create_model(opt)
     model.setup(opt)

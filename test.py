@@ -15,7 +15,7 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    sample_ps = [1., .125, .03125]
+    sample_ps = [0.05]
     to_visualize = ['gray', 'hint', 'hint_ab', 'fake_entr', 'real', 'fake_reg', 'real_ab', 'fake_ab_reg', ]
     S = len(sample_ps)
 
