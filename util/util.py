@@ -226,7 +226,8 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
 
         P = 6
         # points = add_color_patches_rand_geometric(H, W, P, point_count)
-        points = add_color_patches_blob_detector(data, point_count, opt)
+        # points = add_color_patches_blob_detector(data, point_count, opt)
+        points = add_color_patches_spill_the_bucket(data, point_count, opt)
 
         for h, w in points:
             mean_height: Tensor = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
@@ -257,6 +258,32 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
         points.append((h, w))
 
     return points
+
+
+def add_color_patches_spill_the_bucket(data, num_points: int, opt) -> List[Tuple[int, int]]:
+    img = tensor2im(lab2rgb(torch.cat((data['A'], data['B']), dim=1), opt))
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    kp = []
+
+    mask = np.zeros((img.shape[0] + 2, img.shape[1] + 2), dtype=np.uint8)
+    non_zero = 0
+    for i in range(img.shape[1]):
+        for j in range(img.shape[0]):
+            seedPoint = (i, j)
+            if mask[seedPoint[1] + 1, seedPoint[0] + 1] == 1:
+                continue
+            color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+            cv2.floodFill(img, mask, seedPoint, color, (3, 3, 3), (15, 15, 15))
+            cnt_non_zero = cv2.countNonZero(mask)
+            kp.append((seedPoint, cnt_non_zero - non_zero))
+            non_zero = cnt_non_zero
+
+    # if not enough points, return what we have :(
+    if len(kp) < num_points:
+        return list(map(lambda x: x[0], kp))
+    # return the top num_points points
+    return list(map(lambda x: x[0], sorted(kp, key=lambda x: x[1], reverse=True)[:num_points]))
 
 
 def add_color_patches_blob_detector(data, num_points: int, opt) -> List[Tuple[int, int]]:
