@@ -225,8 +225,8 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
         point_count = np.random.geometric(p) if num_points is None else num_points
 
         P = 6
-        points = add_color_patches_rand_geometric(H, W, P, point_count)
-        # points = add_color_patches_blob_detector(data, point_count, opt)
+        # points = add_color_patches_rand_geometric(H, W, P, point_count)
+        points = add_color_patches_blob_detector(data, point_count, opt)
 
         for h, w in points:
             mean_height: Tensor = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
@@ -261,13 +261,7 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
 
 def add_color_patches_blob_detector(data, num_points: int, opt) -> List[Tuple[int, int]]:
     img = tensor2im(lab2rgb(torch.cat((data['A'], data['B']), dim=1), opt))
-    # cv2.imshow("img", img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # # TODO: make bw image
-    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # print(img.shape)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     params = cv2.SimpleBlobDetector_Params()
 
