@@ -234,6 +234,11 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
 
         P = 6
         points = add_color_patches_hybrid(H, W, P, point_count, data, opt)
+        points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
+        # points = add_color_patches_rand_uniform(H, W, P, point_count)
+        # points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
+        # points = add_color_patches_spill_the_bucket(data, point_count, opt)
+        # points = add_color_patches_blob_detector(data, point_count, opt)
 
         for h, w in points:
             mean_height = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
@@ -278,16 +283,15 @@ def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, co
         List of (h, w) coordinates where patches should be placed.
     """
 
-    # Convert data['A'] and data['B'] to Lab image (assuming the input data is in Lab space)
-    L_channel = data['A'].cpu().squeeze(0).squeeze(0).numpy()  # Shape: (H, W)
-    AB_channels = data['B'].cpu().squeeze(0).numpy()  # Shape: (2, H, W) -> (H, W, 2)
+    if n == 0:
+        return []
 
-    # Stack L channel with AB channels to create the full Lab image
-    lab_image = np.stack([L_channel, AB_channels[0], AB_channels[1]], axis=-1)  # Shape: (H, W, 3)
+    # Convert data['A'] to grayscale image
+    gray_image = data['A'].cpu().squeeze(0).squeeze(0).numpy()  # Shape: (H, W)
 
     # Perform SLIC superpixel segmentation
     slic = cv2.ximgproc.createSuperpixelSLIC(
-        lab_image,
+        gray_image,
         algorithm=cv2.ximgproc.SLIC,
         region_size=region_size,
         ruler=compactness
@@ -298,7 +302,7 @@ def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, co
     labels = slic.getLabels()
     num_superpixels = np.max(labels) + 1  # The number of distinct superpixels
 
-    # List to store the feature vector (color) for each superpixel
+    # List to store the feature vector (intensity) for each superpixel
     superpixel_centers = []
     superpixel_sizes = []
 
@@ -306,13 +310,13 @@ def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, co
         # Get all coordinates of pixels in the current superpixel
         superpixel_coords = np.argwhere(labels == i)
 
-        # Calculate the average color of this superpixel
-        avg_color = np.mean(lab_image[superpixel_coords[:, 0], superpixel_coords[:, 1]], axis=0)
-        superpixel_centers.append(avg_color)
+        # Calculate the average intensity of this superpixel
+        avg_intensity = np.mean(gray_image[superpixel_coords[:, 0], superpixel_coords[:, 1]])
+        superpixel_centers.append(avg_intensity)
         superpixel_sizes.append(len(superpixel_coords))
 
     # Convert the list of superpixel centers to a NumPy array for clustering
-    superpixel_centers = np.array(superpixel_centers)
+    superpixel_centers = np.array(superpixel_centers).reshape(-1, 1)
 
     # Perform KMeans clustering on the superpixel centers
     kmeans = KMeans(n_clusters=int(max(1, n)), random_state=0).fit(superpixel_centers)
@@ -327,7 +331,13 @@ def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, co
         cluster_indices = np.where(cluster_labels == cluster)[0]
 
         # Find the superpixel with the most pixels in the current cluster
-        largest_superpixel_idx = cluster_indices[np.argmax([superpixel_sizes[i] for i in cluster_indices])]
+        # Check if the list is empty
+        superpixel_sizes_list = [superpixel_sizes[i] for i in cluster_indices]
+        if not superpixel_sizes_list:
+            print("Warning: Empty superpixel sizes list")
+            continue
+        else:
+            largest_superpixel_idx = cluster_indices[np.argmax(superpixel_sizes_list)]
 
         # Get the coordinates of the largest superpixel's center
         superpixel_coords = np.argwhere(labels == largest_superpixel_idx)
@@ -336,8 +346,7 @@ def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, co
         best_h, best_w = np.mean(superpixel_coords, axis=0).astype(int)
 
         # Ensure the patch is within image bounds
-        if best_h - P // 2 >= 0 and best_w - P // 2 >= 0 and best_h + P // 2 < H and best_w + P // 2 < W:
-            patch_centers.append((best_h, best_w))
+        patch_centers.append((best_h, best_w))
 
     return patch_centers
 
@@ -396,11 +405,15 @@ def add_color_patches_kmeans(H: int, W: int, P: int, n: int, data, opt):
     # For each pixel a color patch is added to the image
 
     # Convert ab channels to rgb
+    # Convert Lab image to RGB
     lab = torch.cat((data['A'], data['B']), dim=1)
     rgb = lab2rgb(lab, opt)
 
-    # Reshape the image to a 2D array of pixels
-    pixels = rgb.view(3, -1).permute(1, 0).cpu().numpy()
+    # Convert RGB image to grayscale
+    gray = rgb.mean(dim=1, keepdim=True)
+
+    # Reshape the grayscale image to a 2D array of pixels
+    pixels = gray.view(-1).cpu().numpy().reshape(-1, 1)
 
     # Perform KMeans clustering
     kmeans = KMeans(n_clusters=n, random_state=0).fit(pixels)

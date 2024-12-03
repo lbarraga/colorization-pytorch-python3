@@ -23,7 +23,7 @@ if __name__ == '__main__':
     opt.phase = 'test'
     opt.dataroot = './dataset/ilsvrc2012/%s/' % opt.phase
     opt.loadSize = 256
-    opt.how_many = 500 # not set by cli args?
+    opt.how_many = 1000 # not set by cli args?
     opt.aspect_ratio = 1.0
     opt.sample_Ps = [6, ]
     opt.load_model = True
