@@ -228,7 +228,11 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
         point_count = 11 if num_points is None else num_points
 
         P = 6
-        points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
+        # points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
+        # points = add_color_patches_rand_uniform(H, W, P, point_count)
+        points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
+        # points = add_color_patches_spill_the_bucket(data, point_count, opt)
+        # points = add_color_patches_blob_detector(data, point_count, opt)
 
         for h, w in points:
             mean_height = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
@@ -361,6 +365,9 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
 
 def add_color_patches_kmeans(H: int, W: int, P: int, n: int, data, opt):
 
+    if n == 0:
+        return []
+
     # data['A'].shape) == torch.Size([1, 1, H, W])
     # data['B'].shape) == torch.Size([1, 2, H, W])
 
@@ -389,18 +396,10 @@ def add_color_patches_kmeans(H: int, W: int, P: int, n: int, data, opt):
         # Get the indices of the pixels in the current cluster
         cluster_indices = np.where(labels == cluster)[0]
 
-        # Calculate the variance around each pixel in the cluster
-        variances = []
-        for idx in cluster_indices:
-            h, w = divmod(idx, W)
-            patch = rgb[:, max(0, h):min(H, h + P), max(0, w ):min(W, w + P)]
-            variance = torch.var(patch)
-            variances.append((variance, h, w))
-
-        # Select the pixel with the least variance
-        shuffle(variances)
-        _, best_h, best_w = min(variances, key=lambda x: x[0])
-        points.append((best_h, best_w))
+        # Randomly select a pixel from the cluster
+        idx = np.random.choice(cluster_indices)
+        h, w = divmod(idx, W)
+        points.append((h, w))
 
     return points
 
