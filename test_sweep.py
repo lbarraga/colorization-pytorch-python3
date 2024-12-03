@@ -102,7 +102,7 @@ if __name__ == '__main__':
     plt.xticks([.4, 1, 2, 5, 10, 20, 50, 100, 200, 500],
                ['Auto', '1', '2', '5', '10', '20', '50', '100', '200', '500'])
     plt.xlabel('Number of points')
-    plt.ylabel('PSNR [db]')
+    plt.ylabel('CIEDE2000 score')
     plt.legend(loc=0)
     plt.xlim((num_points_hack[0], num_points_hack[-1]))
     plt.savefig('./checkpoints/%s/sweep_%s.png' % (opt.name, str_now))

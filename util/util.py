@@ -234,7 +234,7 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
 
         P = 6
         points = add_color_patches_hybrid(H, W, P, point_count, data, opt)
-        points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
+        # points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
         # points = add_color_patches_rand_uniform(H, W, P, point_count)
         # points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
         # points = add_color_patches_spill_the_bucket(data, point_count, opt)
