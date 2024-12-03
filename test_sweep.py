@@ -23,7 +23,7 @@ if __name__ == '__main__':
     opt.phase = 'test'
     opt.dataroot = './dataset/ilsvrc2012/%s/' % opt.phase
     opt.loadSize = 256
-    opt.how_many = 100 # not set by cli args?
+    opt.how_many = 500 # not set by cli args?
     opt.aspect_ratio = 1.0
     opt.sample_Ps = [6, ]
     opt.load_model = True
@@ -64,7 +64,7 @@ if __name__ == '__main__':
             model.test()
             visuals = model.get_current_visuals()
 
-            psnrs[i, nn] = util.calculate_psnr_np(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg']))
+            psnrs[i, nn] = util.calculate_ciede2000(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg']))
 
         if i == opt.how_many - 1:
             break

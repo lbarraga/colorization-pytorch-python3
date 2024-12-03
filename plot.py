@@ -32,8 +32,8 @@ def plot_all_csvs_in_folder(folder):
             plot_results(os.path.join(folder, file_name), ax)
 
     ax.set_xscale('log')
-    ax.set_xticks([.4, 1, 2, 5, 10, 20, 50, 100, 200, 500])
-    ax.set_xticklabels(['Auto', '1', '2', '5', '10', '20', '50', '100', '200', '500'])
+    ax.set_xticks([.4, 1, 2, 5, 10])
+    ax.set_xticklabels(['Auto', '1', '2', '5', '10'])
     ax.set_xlabel('Number of points')
     ax.set_ylabel('PSNR [db]')
     ax.legend(loc=0)

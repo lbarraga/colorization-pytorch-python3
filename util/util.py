@@ -2,11 +2,14 @@ from __future__ import print_function
 
 import os
 from collections import OrderedDict
+from random import shuffle
 from typing import List, Tuple
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
+from sklearn.cluster import KMeans
 import cv2
 from numpy.f2py.auxfuncs import throw_error
 from torch import Tensor
@@ -202,7 +205,7 @@ def get_colorization_data(data_raw, opt, ab_thresh=5., p=.125, num_points=None):
     data['A'] = data_lab[:,[0,],:,:]
     data['B'] = data_lab[:,1:,:,:]
 
-    if(ab_thresh > 0): # mask out grayscale images
+    if ab_thresh > 0: # mask out grayscale images
         thresh = 1.*ab_thresh/opt.ab_norm
         mask = torch.sum(torch.abs(torch.max(torch.max(data['B'],dim=3)[0],dim=2)[0]-torch.min(torch.min(data['B'],dim=3)[0],dim=2)[0]),dim=1) >= thresh
         data['A'] = data['A'][mask,:,:,:]
@@ -222,16 +225,14 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
     for nn in range(N):
         # Determine the number of points to add using a ternary operator
 
-        point_count = np.random.geometric(p) if num_points is None else num_points
+        point_count = 11 if num_points is None else num_points
 
         P = 6
-        # points = add_color_patches_rand_geometric(H, W, P, point_count)
-        # points = add_color_patches_blob_detector(data, point_count, opt)
-        points = add_color_patches_spill_the_bucket(data, point_count, opt)
+        points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
 
         for h, w in points:
-            mean_height: Tensor = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
-            mean: Tensor = torch.mean(mean_height, dim=1, keepdim=True)
+            mean_height = torch.mean(data['B'][nn, :, h:h + P, w:w + P], dim=2, keepdim=True)
+            mean = torch.mean(mean_height, dim=1, keepdim=True)
 
             data['hint_B'][nn, :, h:h + P, w:w + P] = mean.view(1, C, 1, 1)  # Reshape the tensor to the correct shape
             data['mask_B'][nn, :, h:h + P, w:w + P] = 1
@@ -239,13 +240,111 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
     return data
 
 
+def add_color_patches_superpixel_kmeans(H: int, W: int, P: int, n: int, data, compactness=60, region_size=10):
+    """
+    Selects the best color patches based on superpixel segmentation and clustering superpixels using KMeans.
+
+    Args:
+        H (int): Height of the image.
+        W (int): Width of the image.
+        P (int): Patch size.
+        n (int): Number of patches (clusters).
+        data (dict): Dictionary containing the image data in Lab color space.
+        compactness (float): Compactness parameter for superpixel segmentation.
+        region_size (int): Region size parameter for superpixel segmentation.
+
+    Returns:
+        List of (h, w) coordinates where patches should be placed.
+    """
+
+    # Convert data['A'] and data['B'] to Lab image (assuming the input data is in Lab space)
+    L_channel = data['A'].cpu().squeeze(0).squeeze(0).numpy()  # Shape: (H, W)
+    AB_channels = data['B'].cpu().squeeze(0).numpy()  # Shape: (2, H, W) -> (H, W, 2)
+
+    # Stack L channel with AB channels to create the full Lab image
+    lab_image = np.stack([L_channel, AB_channels[0], AB_channels[1]], axis=-1)  # Shape: (H, W, 3)
+
+    # Perform SLIC superpixel segmentation
+    slic = cv2.ximgproc.createSuperpixelSLIC(
+        lab_image,
+        algorithm=cv2.ximgproc.SLIC,
+        region_size=region_size,
+        ruler=compactness
+    )
+    slic.iterate(10)  # Number of iterations
+
+    # Get labels for each superpixel
+    labels = slic.getLabels()
+    num_superpixels = np.max(labels) + 1  # The number of distinct superpixels
+
+    # List to store the feature vector (color) for each superpixel
+    superpixel_centers = []
+    superpixel_sizes = []
+
+    for i in range(num_superpixels):
+        # Get all coordinates of pixels in the current superpixel
+        superpixel_coords = np.argwhere(labels == i)
+
+        # Calculate the average color of this superpixel
+        avg_color = np.mean(lab_image[superpixel_coords[:, 0], superpixel_coords[:, 1]], axis=0)
+        superpixel_centers.append(avg_color)
+        superpixel_sizes.append(len(superpixel_coords))
+
+    # Convert the list of superpixel centers to a NumPy array for clustering
+    superpixel_centers = np.array(superpixel_centers)
+
+    # Perform KMeans clustering on the superpixel centers
+    kmeans = KMeans(n_clusters=int(max(1, n)), random_state=0).fit(superpixel_centers)
+    cluster_labels = kmeans.labels_
+
+    # List to store the best patch locations (center of each cluster)
+    patch_centers = []
+
+    # For each cluster, find the superpixel with the most pixels and return its center as the patch
+    for cluster in range(n):
+        # Get the indices of the superpixels in the current cluster
+        cluster_indices = np.where(cluster_labels == cluster)[0]
+
+        # Find the superpixel with the most pixels in the current cluster
+        largest_superpixel_idx = cluster_indices[np.argmax([superpixel_sizes[i] for i in cluster_indices])]
+
+        # Get the coordinates of the largest superpixel's center
+        superpixel_coords = np.argwhere(labels == largest_superpixel_idx)
+
+        # Get the center of the selected superpixel (the mean position)
+        best_h, best_w = np.mean(superpixel_coords, axis=0).astype(int)
+
+        # Ensure the patch is within image bounds
+        if best_h - P // 2 >= 0 and best_w - P // 2 >= 0 and best_h + P // 2 < H and best_w + P // 2 < W:
+            patch_centers.append((best_h, best_w))
+
+    return patch_centers
+
 def add_color_patches_rand_geometric(H: int, W: int, P: int, n: int):
-    points = []
+    points =  []
+
     for i in range(n):
         h = int(np.clip(np.random.normal((H - P + 1) / 2., (H - P + 1) / 4.), 0, H - P))
         w = int(np.clip(np.random.normal((W - P + 1) / 2., (W - P + 1) / 4.), 0, W - P))
+
         points.append((h, w))
+
     return points
+
+
+def add_color_patches_custom(H: int, W: int, P: int, n: int):
+    return [
+        (310, 170),
+        (350, 150),
+        (280, 120),
+        (300, 100),
+        # (100, 50),
+        # (270, 256),
+        # (100, 250), # roze
+        # (250, 350), # paars
+        # (360, 350), # wit
+        # (310, 170),
+    ]
 
 
 def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
@@ -256,6 +355,52 @@ def add_color_patches_rand_uniform(H: int, W: int, P: int, n: int):
         w = np.random.randint(W - P + 1)
 
         points.append((h, w))
+
+    return points
+
+
+def add_color_patches_kmeans(H: int, W: int, P: int, n: int, data, opt):
+
+    # data['A'].shape) == torch.Size([1, 1, H, W])
+    # data['B'].shape) == torch.Size([1, 2, H, W])
+
+    # data['A'] is the l channel of the image
+    # data['B'] is the ab channel of the image
+
+    # We want a kmeans clustering of n clusters to select the n most representative colors in the image
+    # for each color, a representative pixel will be chosen. The surrounding pixels must have low variance
+    # For each pixel a color patch is added to the image
+
+    # Convert ab channels to rgb
+    lab = torch.cat((data['A'], data['B']), dim=1)
+    rgb = lab2rgb(lab, opt)
+
+    # Reshape the image to a 2D array of pixels
+    pixels = rgb.view(3, -1).permute(1, 0).cpu().numpy()
+
+    # Perform KMeans clustering
+    kmeans = KMeans(n_clusters=n, random_state=0).fit(pixels)
+    labels = kmeans.labels_
+
+    # Initialize list to store the best points
+    points = []
+
+    for cluster in range(n):
+        # Get the indices of the pixels in the current cluster
+        cluster_indices = np.where(labels == cluster)[0]
+
+        # Calculate the variance around each pixel in the cluster
+        variances = []
+        for idx in cluster_indices:
+            h, w = divmod(idx, W)
+            patch = rgb[:, max(0, h):min(H, h + P), max(0, w ):min(W, w + P)]
+            variance = torch.var(patch)
+            variances.append((variance, h, w))
+
+        # Select the pixel with the least variance
+        shuffle(variances)
+        _, best_h, best_w = min(variances, key=lambda x: x[0])
+        points.append((best_h, best_w))
 
     return points
 
@@ -406,6 +551,35 @@ def calculate_psnr_np(img1, img2):
     SE_map = (1.*img1-img2)**2
     cur_MSE = np.mean(SE_map)
     return 20*np.log10(255./np.sqrt(cur_MSE))
+
+import numpy as np
+from skimage import color
+
+def calculate_ciede2000(img1, img2):
+    """
+    Calculate the CIEDE2000 difference between two images and return the score.
+
+    Args:
+        img1: First image in Lab color space.
+        img2: Second image in Lab color space.
+
+    Returns:
+        score: The calculated score based on the CIEDE2000 difference.
+    """
+    # Ensure the images are in Lab color space
+    if img1.shape[-1] != 3 or img2.shape[-1] != 3:
+        raise ValueError("Both images must be in Lab color space with 3 channels.")
+
+    # Calculate the CIEDE2000 difference for each pixel
+    diff = color.deltaE_ciede2000(img1, img2)
+
+    # Take the average of the differences
+    avg_diff = np.mean(diff)
+
+    # Calculate the final score
+    score = 1 / (1 + avg_diff)
+
+    return score
 
 def calculate_psnr_torch(img1, img2):
     SE_map = (1.*img1-img2)**2

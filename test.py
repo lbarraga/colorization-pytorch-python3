@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     dataset = torchvision.datasets.ImageFolder(opt.dataroot,
                                                transform=transforms.Compose([
-                                                   transforms.Resize((opt.loadSize, opt.loadSize)),
+                                                   transforms.Resize((opt.loadSize*2, opt.loadSize*2)),
                                                    transforms.ToTensor()]))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=not opt.serial_batches)
 
