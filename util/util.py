@@ -3,6 +3,7 @@ from __future__ import print_function
 import math
 import os
 from collections import OrderedDict
+from random import shuffle
 from typing import List, Tuple
 
 import cv2
@@ -233,10 +234,10 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
         point_count = 11 if num_points is None else num_points
 
         P = 6
-        points = add_color_patches_hybrid(H, W, P, point_count, data, opt)
+        # points = add_color_patches_hybrid(H, W, P, point_count, data, opt)
         # points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
         # points = add_color_patches_rand_uniform(H, W, P, point_count)
-        # points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
+        points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
         # points = add_color_patches_spill_the_bucket(data, point_count, opt)
         # points = add_color_patches_blob_detector(data, point_count, opt)
 
@@ -394,37 +395,23 @@ def add_color_patches_kmeans(H: int, W: int, P: int, n: int, data, opt):
     if n == 0:
         return []
 
-    # data['A'].shape) == torch.Size([1, 1, H, W])
-    # data['B'].shape) == torch.Size([1, 2, H, W])
-
-    # data['A'] is the l channel of the image
-    # data['B'] is the ab channel of the image
-
-    # We want a kmeans clustering of n clusters to select the n most representative colors in the image
-    # for each color, a representative pixel will be chosen. The surrounding pixels must have low variance
-    # For each pixel a color patch is added to the image
-
-    # Convert ab channels to rgb
-    # Convert Lab image to RGB
-    lab = torch.cat((data['A'], data['B']), dim=1)
-    rgb = lab2rgb(lab, opt)
-
-    # Convert RGB image to grayscale
-    gray = rgb.mean(dim=1, keepdim=True)
-
-    # Reshape the grayscale image to a 2D array of pixels
-    pixels = gray.view(-1).cpu().numpy().reshape(-1, 1)
+    # Use only the luminance channel
+    luminance = data['A'].view(-1).cpu().numpy().reshape(-1, 1)
 
     # Perform KMeans clustering
-    kmeans = KMeans(n_clusters=n, random_state=0).fit(pixels)
+    kmeans = KMeans(n_clusters=n, random_state=0).fit(luminance)
     labels = kmeans.labels_
 
     # Initialize list to store the best points
     points = []
-
     for cluster in range(n):
         # Get the indices of the pixels in the current cluster
         cluster_indices = np.where(labels == cluster)[0]
+
+        # Check if cluster_indices is empty
+        if len(cluster_indices) == 0:
+            print(f"Warning: Empty cluster indices for cluster {cluster}")
+            continue
 
         # Randomly select a pixel from the cluster
         idx = np.random.choice(cluster_indices)

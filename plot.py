@@ -22,7 +22,7 @@ def plot_results(csv_file, ax):
     num_points_hack = 1. * num_points
     num_points_hack[0] = .4
 
-    ax.plot(num_points_hack, psnr_mean, 'o-', label=os.path.basename(csv_file))
+    ax.plot(num_points_hack, psnr_mean, 'o-', label=os.path.basename(csv_file[:-4]))
     ax.fill_between(num_points_hack, psnr_mean - psnr_std, psnr_mean + psnr_std, alpha=0.2)
 
 def plot_all_csvs_in_folder(folder):
@@ -32,13 +32,13 @@ def plot_all_csvs_in_folder(folder):
             plot_results(os.path.join(folder, file_name), ax)
 
     ax.set_xscale('log')
-    ax.set_xticks([.4, 1, 2, 5, 10])
-    ax.set_xticklabels(['Auto', '1', '2', '5', '10'])
-    ax.set_xlabel('Number of points')
-    ax.set_ylabel('PSNR [db]')
+    plt.xticks([.4, 1, 2, 5, 10, 20, 50, 100, 200, 500],
+               ['Auto', '1', '2', '5', '10', '20', '50', '100', '200', '500'])
+    ax.set_xlabel('Number Color Hints')
+    ax.set_ylabel('CIEDE2000 Ratio [0-1]')
     ax.legend(loc=0)
     ax.set_xlim((.4, 500))
-    ax.set_title('Results for all CSV files')
+    ax.set_title('')
     plt.show()
 
 if __name__ == '__main__':
