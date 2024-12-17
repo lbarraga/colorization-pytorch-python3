@@ -64,7 +64,7 @@ if __name__ == '__main__':
             model.test()
             visuals = model.get_current_visuals()
 
-            psnrs[i, nn] = util.calculate_ciede2000(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg']))
+            psnrs[i, nn] = util.calculate_psnr_np(util.tensor2im(visuals['real']), util.tensor2im(visuals['fake_reg']))
 
         if i == opt.how_many - 1:
             break

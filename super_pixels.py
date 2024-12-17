@@ -41,7 +41,7 @@ def generate_superpixels(input_image_path, compactness, region_size, output_imag
     print(f"Superpixel segmentation completed. Output saved to '{output_image_path}'.")
 
 # Example usage
-input_image_path = "/home/lukasbt/Downloads/dataset/val/ILSVRC2012_val_00000008.JPEG"  # Replace with your image path
+input_image_path = "/home/lukasbt/Pictures/n02085620_242_gray.JPEG"  # Replace with your image path
 generate_superpixels(
     input_image_path=input_image_path,
     compactness=60,

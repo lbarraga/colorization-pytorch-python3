@@ -231,13 +231,13 @@ def add_color_patches(data, opt, p=0.125, num_points=None, samp='?'):
     for nn in range(N):
         # Determine the number of points to add using a ternary operator
 
-        point_count = 11 if num_points is None else num_points
+        point_count = 500 if num_points is None else num_points
 
         P = 6
         # points = add_color_patches_hybrid(H, W, P, point_count, data, opt)
         # points = add_color_patches_superpixel_kmeans(H, W, P, point_count, data)
-        # points = add_color_patches_rand_uniform(H, W, P, point_count)
-        points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
+        points = add_color_patches_rand_uniform(H, W, P, point_count)
+        # points = add_color_patches_kmeans(H, W, P, point_count, data, opt)
         # points = add_color_patches_spill_the_bucket(data, point_count, opt)
         # points = add_color_patches_blob_detector(data, point_count, opt)
 
@@ -569,17 +569,10 @@ def decode_mean(data_ab_quant, opt):
     return data_ab_inf
 
 
-def calculate_psnr_np(img1, img2):
-    import numpy as np
-    SE_map = (1. * img1 - img2) ** 2
-    cur_MSE = np.mean(SE_map)
-    return 20 * np.log10(255. / np.sqrt(cur_MSE))
-
-
 import numpy as np
+
+
 from skimage import color
-
-
 def calculate_ciede2000(img1, img2):
     """
     Calculate the CIEDE2000 difference between two images and return the score.
@@ -599,15 +592,23 @@ def calculate_ciede2000(img1, img2):
     diff = color.deltaE_ciede2000(img1, img2)
 
     # Take the average of the differences
-    avg_diff = np.mean(diff)
+    avg_diff = np.mean(np.abs(diff))
 
     # Calculate the final score
-    score = 1 / (1 + avg_diff)
+    score = 1 / avg_diff
 
     return score
 
 
+def calculate_psnr_np(img1, img2):
+    diff = color.deltaE_ciede2000(img1, img2)
+    SE_map = diff ** 2
+    cur_MSE = np.mean(SE_map)
+    return 20 * np.log10(255. / np.sqrt(cur_MSE))
+
+
 def calculate_psnr_torch(img1, img2):
-    SE_map = (1. * img1 - img2) ** 2
+    diff = color.deltaE_ciede2000(img1, img2)
+    SE_map = diff ** 2
     cur_MSE = torch.mean(SE_map)
     return 20 * torch.log10(1. / torch.sqrt(cur_MSE))
