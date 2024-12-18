@@ -43,6 +43,8 @@ python test.py --name siggraph_caffemodel --how_many 10 --mask_cent 0
 
 ## Testing the model
 
+To change the method currently being tested, change the function being called in `add_color_patches` in `util.py`.
+
 You can test the model on the validation data by running the following command:
 ```bash
 python test_sweep.py --name siggraph_caffemodel --mask_cent 0
