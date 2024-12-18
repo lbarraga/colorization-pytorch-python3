@@ -10,7 +10,7 @@
 
 ## Fast start
 
-1. clone this repo and create a virtual environment:
+1. clone this repo and create a virtual environment (recommended Python 3.12):
   ```bash
   git clone https://github.com/lbarraga/colorization-pytorch-python3.git
   cd colorization-pytorch-python3
@@ -24,6 +24,7 @@
   ```
 
 3. Download the [ILSVRC 2012 dataset](https://www.image-net.org/challenges/LSVRC/2012/2012-downloads.php)(training images (728MB) and validation images (6.3GB)). extract the training images and put them in a folder <folder>/train. Extract the validation images and put them in a folder <folder>/val.
+
 4. Prepare the dataset:
   ```bash
   python make_ilsvrc_dataset.py --in_path <folder>
@@ -39,7 +40,7 @@
 python test.py --name siggraph_caffemodel --how_many 10 --mask_cent 0
 ```
     
-7. A results folder will be created with the results of the test. You can visualize the results by opening the index.html file in the results folder.
+7. A results folder will be created with the results of the test. You can visualize the results by opening the `index.html` file in the results folder.
 
 ## Testing the model
 
