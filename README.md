@@ -52,3 +52,8 @@ in the code of test_sweep.py you can set the `how_many` flag, that has been hard
 
 in `./checkpoints/siggraph_caffemodel` you will find a csv with the mean and std for each number of points, 
 along with the plot of the test.
+
+To visually compare the results/performance of the different models, run:
+```bash
+python plot.py
+```
